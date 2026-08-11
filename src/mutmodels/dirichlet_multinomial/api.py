@@ -36,7 +36,6 @@ def dm_two_condition_SBS(matrix_fn,g1,g2,bg_fn=None,substitutions=None,matrix_ty
     matrix = read_matrix(matrix_fn,matrix_type=matrix_type)
     
     data = matrix.loc[:,g1+g2]
-    
 
     if bg_fn:
         bg = align(pd.read_csv(bg_fn,sep='\t',index_col=0).squeeze("columns"))

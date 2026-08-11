@@ -4,7 +4,7 @@ dirichlet multinomial models to compare mutation spectra
 import numpy as np
 from scipy.special import gammaln
 import warnings
-from scipy.optimize import minimize,minimize_scalar
+from scipy.optimize import minimize_scalar
 
 
 # support functions
@@ -33,6 +33,23 @@ def _get_stat(P_A, P_B, studentize=True, transform=None, return_all=False):
         'pA': Praw_A.mean(0), 'pB': Praw_B.mean(0),
         'TVD':tvd
     }
+
+def _onesample_max_stat(P, z0, studentize=True, transform=None):
+    """
+    P : per-replicate proportions, shape (n_reps, K)
+    z0: reference, already on the same scale as transform(P), shape (K,)
+    """
+    if transform is not None:
+        P = transform(P)
+
+    diff = P.mean(axis=0) - z0
+
+    if not studentize:
+        return np.max(np.abs(diff))
+
+    se = np.sqrt(P.var(axis=0, ddof=1) / P.shape[0])
+    s0 = np.median(se)
+    return np.max(np.abs(diff / (se + s0)))
 
 # fitting dirichlet-multinomial model
 
@@ -66,22 +83,6 @@ def dm_loglik_fixed_mean(log_alpha0, counts, p0):
         )
 
     return ll
-
-def neg_dm_loglik(log_alpha0, counts, p0):
-    return -dm_loglik_fixed_mean(log_alpha0, counts, p0)
-
-def fit_dm_fixed_mean_old(counts, p0, start_alpha0=10.0):
-
-    result = minimize(
-        neg_dm_loglik,
-        x0=np.log([start_alpha0]),
-        args=(counts, p0),
-        method="L-BFGS-B"
-    )
-
-    alpha0_hat = np.exp(result.x[0])
-
-    return alpha0_hat, result
 
 def fit_dm_fixed_mean(
         counts,
@@ -132,8 +133,8 @@ def fit_dm_fixed_mean(
 class DMFitError(RuntimeError):
     """DM fixed-mean dispersion fit did not converge to a usable optimum."""
 
-# two-condition test
 
+# two-condition test
 def dm_two_condition(counts_A, counts_B, n_bootstraps=1000, sig_level=0.05,
                              dispersion_type='split', studentize=True, stat_type='max',
                              transform=None, rng=None):
@@ -223,6 +224,54 @@ def dm_two_condition(counts_A, counts_B, n_bootstraps=1000, sig_level=0.05,
         'a0_A': a0_A, 'a0_B': a0_B,
         'TVD':obs_diff_stats['TVD'],
     }
+
+# one-condition test
+def dm_onesample(obs_counts, p0, n_bootstraps=1000, sig_level=0.05,
+                         studentize=True, transform=None, rng=None):
+    """Test a set of replicates against a fixed reference composition p0."""
+
+    if obs_counts.shape[0] < 2:
+        raise ValueError('need >= 2 replicates to studentize')
+
+    p0 = np.asarray(p0, dtype=float)
+    p0 = p0 / p0.sum()                      # guard: must be a composition
+
+    a0_hat, _ = fit_dm_fixed_mean(obs_counts, p0)
+    alpha_hat = a0_hat * p0
+    rep_sizes = obs_counts.sum(axis=1)
+
+    # reference on both scales, transformed exactly like the data
+    z0_t   = transform(p0[None, :])[0] if transform is not None else p0
+    z0_raw = p0
+
+    P_obs = _to_props(obs_counts)
+    obs_stat = _onesample_max_stat(P_obs, z0_t,   studentize, transform)
+    obs_raw  = _onesample_max_stat(P_obs, z0_raw, studentize=False, transform=None)
+
+    rng = np.random.default_rng(rng)
+    sim_stats = np.empty(n_bootstraps)
+    sim_raws  = np.empty(n_bootstraps)
+
+    for b in range(n_bootstraps):
+        sim_counts = np.vstack([
+            rng.multinomial(N, rng.dirichlet(alpha_hat)) for N in rep_sizes
+        ])
+        P_sim = _to_props(sim_counts)
+        sim_stats[b] = _onesample_max_stat(P_sim, z0_t,   studentize, transform)
+        sim_raws[b]  = _onesample_max_stat(P_sim, z0_raw, studentize=False, transform=None)
+
+    p_value = (np.sum(sim_stats >= obs_stat) + 1) / (n_bootstraps + 1)
+
+    return {
+        'p_value': p_value,
+        'obs_stat': obs_stat,
+        'stat_cutoff': np.quantile(sim_stats, 1 - sig_level),
+        'obs_raw_maxdev': obs_raw,
+        'raw_cutoff': np.quantile(sim_raws, 1 - sig_level),
+        'sim_stats': sim_stats,
+        'alpha0_hat': a0_hat,
+    }
+
 
 if __name__ == "__main__":
     pass
