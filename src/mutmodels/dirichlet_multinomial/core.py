@@ -23,7 +23,6 @@ def _get_stat(P_A, P_B, studentize=True, transform=None, return_all=False):
     # calculate total variation difference
     tvd = 0.5* np.sum(np.abs(Praw_A.mean(0) - Praw_B.mean(0)))
 
-
     if not return_all:
         return t
 
@@ -34,7 +33,7 @@ def _get_stat(P_A, P_B, studentize=True, transform=None, return_all=False):
         'TVD':tvd
     }
 
-def _onesample_max_stat(P, z0, studentize=True, transform=None):
+def _onesample_get_stat(P,z0,studentize=True,transform=None):
     """
     P : per-replicate proportions, shape (n_reps, K)
     z0: reference, already on the same scale as transform(P), shape (K,)
@@ -44,12 +43,13 @@ def _onesample_max_stat(P, z0, studentize=True, transform=None):
 
     diff = P.mean(axis=0) - z0
 
-    if not studentize:
-        return np.max(np.abs(diff))
+    if studentize:
+        se = np.sqrt(P.var(axis=0, ddof=1) / P.shape[0])
+        s0 = np.median(se)
+        diff = diff / (se + s0)
 
-    se = np.sqrt(P.var(axis=0, ddof=1) / P.shape[0])
-    s0 = np.median(se)
-    return np.max(np.abs(diff / (se + s0)))
+    return diff
+
 
 # fitting dirichlet-multinomial model
 
@@ -183,6 +183,10 @@ def dm_two_condition(counts_A, counts_B, n_bootstraps=1000, sig_level=0.05,
     rep_sizes_B = counts_B.sum(axis=1)
 
     P_A, P_B = _to_props(counts_A), _to_props(counts_B)
+    print('props A:')
+    print(P_A.shape)
+    print('props B:')    
+    print(P_B.shape)
     obs_diff_stats = _get_stat(P_A, P_B, studentize, transform,return_all=True)
     if stat_type == 'max':
         obs_stat = np.max(np.abs(obs_diff_stats['t']))
@@ -225,16 +229,16 @@ def dm_two_condition(counts_A, counts_B, n_bootstraps=1000, sig_level=0.05,
         'TVD':obs_diff_stats['TVD'],
     }
 
-# one-condition test
+# one-sample test against reference set of proportions (e.g. a cosmic signature)
 def dm_onesample(obs_counts, p0, n_bootstraps=1000, sig_level=0.05,
-                         studentize=True, transform=None, rng=None):
+                stat_type='max',studentize=True, transform=None, rng=None):
     """Test a set of replicates against a fixed reference composition p0."""
 
     if obs_counts.shape[0] < 2:
         raise ValueError('need >= 2 replicates to studentize')
 
     p0 = np.asarray(p0, dtype=float)
-    p0 = p0 / p0.sum()                      # guard: must be a composition
+    p0 = p0 / p0.sum() # guard: must sum to 1
 
     a0_hat, _ = fit_dm_fixed_mean(obs_counts, p0)
     alpha_hat = a0_hat * p0
@@ -245,8 +249,18 @@ def dm_onesample(obs_counts, p0, n_bootstraps=1000, sig_level=0.05,
     z0_raw = p0
 
     P_obs = _to_props(obs_counts)
-    obs_stat = _onesample_max_stat(P_obs, z0_t,   studentize, transform)
-    obs_raw  = _onesample_max_stat(P_obs, z0_raw, studentize=False, transform=None)
+
+    obs_stat = _onesample_get_stat(P_obs, z0_t,   studentize, transform)
+    obs_raw  = _onesample_get_stat(P_obs, z0_raw, studentize=False, transform=None)
+
+    if stat_type == 'max':
+        obs_stat = np.max(np.abs(obs_stat))
+        obs_raw = np.max(np.abs(obs_raw))
+    elif stat_type == 'sum':
+        obs_stat = np.sum(np.abs(obs_stat))
+        obs_raw = np.sum(np.abs(obs_raw))
+    else:
+        raise ValueError(f'stat type {stat_type} not a valid option')
 
     rng = np.random.default_rng(rng)
     sim_stats = np.empty(n_bootstraps)
@@ -257,21 +271,32 @@ def dm_onesample(obs_counts, p0, n_bootstraps=1000, sig_level=0.05,
             rng.multinomial(N, rng.dirichlet(alpha_hat)) for N in rep_sizes
         ])
         P_sim = _to_props(sim_counts)
-        sim_stats[b] = _onesample_max_stat(P_sim, z0_t,   studentize, transform)
-        sim_raws[b]  = _onesample_max_stat(P_sim, z0_raw, studentize=False, transform=None)
+        sim_stat = _onesample_get_stat(P_sim, z0_t,   studentize, transform)
+        sim_raw = _onesample_get_stat(P_sim, z0_raw, studentize=False, transform=None)
+
+        if stat_type == 'max':
+            sim_stat = np.max(np.abs(sim_stat))
+            sim_raw = np.max(np.abs(sim_raw))
+        elif stat_type == 'sum':
+            sim_stat = np.sum(np.abs(sim_stat))
+            sim_raw = np.sum(np.abs(sim_raw))
+
+        sim_stats[b] = sim_stat
+        sim_raws[b] = sim_raw
 
     p_value = (np.sum(sim_stats >= obs_stat) + 1) / (n_bootstraps + 1)
+
+    # compute total variation distance
+    tvd = 0.5 * np.sum(np.abs(z0_raw - P_obs.mean(0)))
 
     return {
         'p_value': p_value,
         'obs_stat': obs_stat,
         'stat_cutoff': np.quantile(sim_stats, 1 - sig_level),
-        'obs_raw_maxdev': obs_raw,
-        'raw_cutoff': np.quantile(sim_raws, 1 - sig_level),
         'sim_stats': sim_stats,
         'alpha0_hat': a0_hat,
+        'TVD': tvd,
     }
-
 
 if __name__ == "__main__":
     pass

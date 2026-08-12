@@ -4,7 +4,7 @@ high level api functions, made available through __init__.py
 
 import pandas as pd
 
-from mutmodels.common.parsers import read_matrix,align
+from mutmodels.common.parsers import read_matrix,read_series,align
 import mutmodels.dirichlet_multinomial.core as dm
 
 # helper functions
@@ -33,12 +33,13 @@ def dm_two_condition_SBS(matrix_fn,g1,g2,bg_fn=None,substitutions=None,matrix_ty
                          n_bootstraps=1000,sig_level=0.05,dispersion_type='split',
                          studentize=True,stat_type='max',transform=None,rng=None):
 
-    matrix = read_matrix(matrix_fn,matrix_type=matrix_type)
+    matrix = read_matrix(matrix_fn,data_type=matrix_type)
     
     data = matrix.loc[:,g1+g2]
 
     if bg_fn:
-        bg = align(pd.read_csv(bg_fn,sep='\t',index_col=0).squeeze("columns"))
+        # bg = align(pd.read_csv(bg_fn,sep='\t',index_col=0).squeeze("columns"))
+        bg = read_series(bg_fn,data_type=matrix_type)
         data = background_correct(data,bg)
 
     if substitutions:
@@ -55,4 +56,29 @@ def dm_two_condition_SBS(matrix_fn,g1,g2,bg_fn=None,substitutions=None,matrix_ty
 
     return result
 
+def dm_onesample_SBS(matrix_fn,ref_fn,sample_ids=None,bg_fn=None,
+                     substitutions=None,matrix_type='SBS96',n_bootstraps=1000,sig_level=0.05,
+                     studentize=True,stat_type='max',transform=None,rng=None):
+    data = read_matrix(matrix_fn,data_type=matrix_type)
+    if sample_ids:
+        data = data.loc[:,sample_ids]
 
+    if bg_fn:
+        bg = read_series(bg_fn,data_type=matrix_type)
+        data = background_correct(data,bg)
+
+    ref = read_series(ref_fn)
+
+    if substitutions:
+        data = select_substitutions(data,substitutions)
+        
+        ref = select_substitutions(ref,substitutions)
+        # renormalise reference with selected subset
+        ref = ref/ref.sum()
+
+    obs_counts = data.values.T
+
+    result = dm.dm_onesample(obs_counts,ref,n_bootstraps=n_bootstraps,sig_level=sig_level,
+                             studentize=studentize,stat_type=stat_type,transform=transform,rng=rng)
+
+    return result
