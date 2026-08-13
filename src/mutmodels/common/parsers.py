@@ -13,8 +13,6 @@ MATRIX_CLASSES = {
     "ID28": 28, "ID83": 83, "ID415": 415,
 }
 
-from .mutation_types import SBS96
-
 def align(data, order=SBS96):
     """Reorder a Series (indexed by MutationType) or a DataFrame
     (row-indexed by MutationType) into canonical `order`."""

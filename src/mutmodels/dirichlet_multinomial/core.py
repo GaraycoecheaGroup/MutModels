@@ -6,7 +6,6 @@ from scipy.special import gammaln
 import warnings
 from scipy.optimize import minimize_scalar
 
-
 # support functions
 def _to_props(counts):
     return counts / counts.sum(axis=1, keepdims=True)
@@ -49,7 +48,6 @@ def _onesample_get_stat(P,z0,studentize=True,transform=None):
         diff = diff / (se + s0)
 
     return diff
-
 
 # fitting dirichlet-multinomial model
 
@@ -135,7 +133,7 @@ class DMFitError(RuntimeError):
 
 
 # two-condition test
-def dm_two_condition(counts_A, counts_B, n_bootstraps=1000, sig_level=0.05,
+def dm_twosample(counts_A, counts_B, n_bootstraps=1000, sig_level=0.05,
                              dispersion_type='split', studentize=True, stat_type='max',
                              transform=None, rng=None):
     """Two-condition test using a DM null and a max-type statistic."""
@@ -183,10 +181,7 @@ def dm_two_condition(counts_A, counts_B, n_bootstraps=1000, sig_level=0.05,
     rep_sizes_B = counts_B.sum(axis=1)
 
     P_A, P_B = _to_props(counts_A), _to_props(counts_B)
-    print('props A:')
-    print(P_A.shape)
-    print('props B:')    
-    print(P_B.shape)
+
     obs_diff_stats = _get_stat(P_A, P_B, studentize, transform,return_all=True)
     if stat_type == 'max':
         obs_stat = np.max(np.abs(obs_diff_stats['t']))

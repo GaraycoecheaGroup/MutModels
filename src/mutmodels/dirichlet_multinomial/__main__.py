@@ -8,7 +8,7 @@ if __name__ == "__main__":
     from mutmodels.common.parsers import read_matrix,align
     import pandas as pd
 
-    from mutmodels.dirichlet_multinomial.api import dm_two_condition_SBS,dm_onesample_SBS
+    from mutmodels import dm_twosample_SBS,dm_onesample_SBS
     from mutmodels.dirichlet_multinomial.api import select_substitutions
     import mutmodels.dirichlet_multinomial.core as dm
     
@@ -74,18 +74,18 @@ if __name__ == "__main__":
     # g2 = ['JG0182b','JG0182c','JG0182d','JG0182e']
 
     # # figure 2 comparing two fdur concentrations:
-    g1 = ['JG0138b','JG0138c','JG0138d','JG0138e']
-    g2 = ['JG0139b','JG0139c','JG0139d','JG0139e']
+    # g1 = ['JG0138b','JG0138c','JG0138d','JG0138e']
+    # g2 = ['JG0139b','JG0139c','JG0139d','JG0139e']
 
     # # figure 2 samples
-    # g2 = ['JG0139b','JG0139c','JG0139d','JG0139e']
-    # g1 = ['JG0140b','JG0140c','JG0140d','JG0140e']
+    g2 = ['JG0139b','JG0139c','JG0139d','JG0139e']
+    g1 = ['JG0140b','JG0140c','JG0140d','JG0140e']
 
     # # substitutions to include
     substitutions = ['T>G','T>C','T>A']
 
     # # test the api function
-    res = dm_two_condition_SBS(matrix_fn,g1,g2,bg_fn=bg_fn,substitutions=substitutions,rng=1234,)
+    res = dm_twosample_SBS(matrix_fn,g1,g2,bg_fn=bg_fn,substitutions=substitutions,rng=1234,)
 
     print('two condition api test:')
     print(res['p_value'])

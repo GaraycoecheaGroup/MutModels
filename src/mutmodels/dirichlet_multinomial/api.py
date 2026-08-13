@@ -2,8 +2,6 @@
 high level api functions, made available through __init__.py
 """
 
-import pandas as pd
-
 from mutmodels.common.parsers import read_matrix,read_series,align
 import mutmodels.dirichlet_multinomial.core as dm
 
@@ -29,7 +27,7 @@ def select_substitutions(data,substitutions):
     return data
 
 # main api functions
-def dm_two_condition_SBS(matrix_fn,g1,g2,bg_fn=None,substitutions=None,matrix_type='SBS96',
+def dm_twosample_SBS(matrix_fn,g1,g2,bg_fn=None,substitutions=None,matrix_type='SBS96',
                          n_bootstraps=1000,sig_level=0.05,dispersion_type='split',
                          studentize=True,stat_type='max',transform=None,rng=None):
 
@@ -49,7 +47,7 @@ def dm_two_condition_SBS(matrix_fn,g1,g2,bg_fn=None,substitutions=None,matrix_ty
     g1_counts = data[g1].values.T
     g2_counts = data[g2].values.T
 
-    result = dm.dm_two_condition(g1_counts,g2_counts,n_bootstraps = n_bootstraps,
+    result = dm.dm_twosample(g1_counts,g2_counts,n_bootstraps = n_bootstraps,
                               sig_level = sig_level,dispersion_type=dispersion_type,
                               studentize=studentize,stat_type=stat_type,
                               transform=transform,rng=rng)
